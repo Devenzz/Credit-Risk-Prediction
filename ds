@@ -1,0 +1,541 @@
+import streamlit as st
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+
+# ================= PAGE CONFIG =================
+st.set_page_config(
+    page_title="AI Credit Risk Dashboard",
+    page_icon="💳",
+    layout="wide"
+)
+
+sns.set_theme(style="darkgrid")
+plt.rcParams["figure.autolayout"] = True
+
+# ================= LOAD DATA =================
+@st.cache_data
+def load_data():
+    return pd.read_csv("credit_risk_dataset.csv")
+
+df = load_data()
+
+num_features = df.select_dtypes(include=np.number).columns.tolist()
+cat_features = df.select_dtypes(include="object").columns.tolist()
+
+# ================= PREMIUM DARK CSS =================
+st.markdown("""
+<style>
+.main {
+    background-color: #0f172a;
+    color: white;
+}
+
+.kpi-box {
+    border-radius: 14px;
+    padding: 22px;
+    text-align: center;
+    background: linear-gradient(135deg,#1e293b,#334155);
+    color: white;
+    box-shadow: 0px 8px 25px rgba(0,0,0,0.4);
+    transition: 0.3s;
+}
+
+.kpi-box:hover {
+    transform: scale(1.05);
+}
+
+.kpi-title {
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+.kpi-value {
+    font-size: 30px;
+    font-weight: bold;
+    margin-top: 6px;
+}
+
+.section-title {
+    font-size: 24px;
+    font-weight: 600;
+    margin-top: 20px;
+}
+
+.insight-box {
+    background: #1e293b;
+    padding: 15px;
+    border-radius: 10px;
+    margin-top: 10px;
+    border-left: 4px solid #38bdf8;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ================= TITLE =================
+st.markdown("<h1 style='text-align:center;'>💳 AI Credit Risk Intelligence Dashboard</h1>", unsafe_allow_html=True)
+st.markdown("---")
+
+# ================= KPI SECTION =================
+total_records = df.shape[0]
+avg_income = int(df["person_income"].mean())
+avg_loan = int(df["loan_amnt"].mean())
+default_rate = round(df["loan_status"].mean() * 100, 2)
+avg_interest = round(df["loan_int_rate"].mean(), 2)
+
+k1, k2, k3, k4 = st.columns(4)
+
+k1.markdown(f"""<div class="kpi-box"><div class="kpi-title">Total Applicants</div>
+<div class="kpi-value">{total_records}</div></div>""", unsafe_allow_html=True)
+
+k2.markdown(f"""<div class="kpi-box"><div class="kpi-title">Avg Income</div>
+<div class="kpi-value">₹ {avg_income:,}</div></div>""", unsafe_allow_html=True)
+
+k3.markdown(f"""<div class="kpi-box"><div class="kpi-title">Avg Loan</div>
+<div class="kpi-value">₹ {avg_loan:,}</div></div>""", unsafe_allow_html=True)
+
+k4.markdown(f"""<div class="kpi-box"><div class="kpi-title">Default Rate</div>
+<div class="kpi-value">{default_rate}%</div></div>""", unsafe_allow_html=True)
+
+st.markdown("---")
+
+# ================= ANALYSIS SECTION =================
+st.markdown('<div class="section-title">📊 Data Analysis Control</div>', unsafe_allow_html=True)
+
+analysis_type = st.selectbox(
+    "Select Analysis Type",
+    ["Univariate", "Bivariate"]
+)
+
+graph_type = st.selectbox(
+    "Select Graph Type",
+    ["Histogram", "Bar Chart", "Box Plot", "Pie Chart", "Scatter Plot"]
+)
+
+st.markdown("---")
+
+# ================= UNIVARIATE =================
+if analysis_type == "Univariate":
+
+    feature = st.selectbox("Select Feature", num_features + cat_features)
+
+    fig, ax = plt.subplots(figsize=(9,5))
+
+    if feature in num_features:
+
+        if graph_type == "Histogram":
+            sns.histplot(df[feature], kde=True, color="#38bdf8", ax=ax)
+
+        elif graph_type == "Box Plot":
+            sns.boxplot(x=df[feature], color="#f97316", ax=ax)
+
+        else:
+            sns.histplot(df[feature], kde=True, ax=ax)
+
+    else:
+
+        if graph_type == "Pie Chart":
+            counts = df[feature].value_counts()
+            ax.pie(counts, labels=counts.index, autopct='%1.1f%%')
+            ax.axis('equal')
+
+        else:
+            sns.countplot(data=df, x=feature, palette="viridis", ax=ax)
+            plt.xticks(rotation=45)
+
+    ax.set_title(f"{graph_type} of {feature}")
+    st.pyplot(fig)
+
+    # ================= AUTO INSIGHTS =================
+    if feature in num_features:
+        st.markdown(f"""
+        <div class="insight-box">
+        📊 Insights:
+        <br>• Average value is {round(df[feature].mean(),2)}
+        <br>• Maximum value is {round(df[feature].max(),2)}
+        <br>• Minimum value is {round(df[feature].min(),2)}
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        top_category = df[feature].value_counts().idxmax()
+        st.markdown(f"""
+        <div class="insight-box">
+        📊 Insights:
+        <br>• Most common category is <b>{top_category}</b>
+        <br>• Total unique categories: {df[feature].nunique()}
+        <br>• Distribution shows variation across applicants
+        </div>
+        """, unsafe_allow_html=True)
+
+# ================= BIVARIATE =================
+else:
+
+    relation_type = st.selectbox(
+        "Select Relationship Type",
+        ["Num vs Num", "Num vs Cat", "Cat vs Cat"]
+    )
+
+    fig, ax = plt.subplots(figsize=(9,5))
+
+    if relation_type == "Num vs Num":
+        x = st.selectbox("Select X", num_features)
+        y = st.selectbox("Select Y", num_features, index=1)
+
+        sns.scatterplot(data=df, x=x, y=y, hue="loan_status",
+                        palette="coolwarm", ax=ax)
+
+        insight_text = f"""
+        • Correlation between {x} and {y} is {round(df[x].corr(df[y]),2)}
+        <br>• Data shows trend pattern between variables
+        <br>• Risk varies based on distribution clusters
+        """
+
+    elif relation_type == "Num vs Cat":
+        num = st.selectbox("Select Numerical", num_features)
+        cat = st.selectbox("Select Categorical", cat_features)
+
+        sns.boxplot(data=df, x=cat, y=num, palette="Set2", ax=ax)
+
+        insight_text = f"""
+        • Average {num} differs across {cat}
+        <br>• Median comparison helps detect risk difference
+        <br>• Category distribution impacts financial behavior
+        """
+
+    else:
+        x = st.selectbox("Select Category 1", cat_features)
+        y = st.selectbox("Select Category 2", cat_features)
+
+        sns.countplot(data=df, x=x, hue=y, ax=ax)
+
+        insight_text = f"""
+        • Relationship between {x} and {y} visible
+        <br>• Category proportions vary significantly
+        <br>• Certain combinations indicate higher risk
+        """
+
+    ax.set_title(f"{relation_type} Analysis")
+    st.pyplot(fig)
+
+    st.markdown(f"""
+    <div class="insight-box">
+    📊 Insights:
+    <br>{insight_text}
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("---")
+st.success("🚀 Ultra Premium Credit Risk Dashboard by Devendra Gangurde")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
+
+# ================= PAGE CONFIG =================
+st.set_page_config(
+    page_title="AI Credit Risk Intelligence",
+    page_icon="💳",
+    layout="wide"
+)
+
+# ================= LOAD DATA =================
+@st.cache_data
+def load_data():
+    return pd.read_csv("credit_risk_dataset.csv")
+
+df = load_data()
+
+num_features = df.select_dtypes(include=np.number).columns.tolist()
+cat_features = df.select_dtypes(include="object").columns.tolist()
+
+# ================= DARK THEME CSS =================
+st.markdown("""
+<style>
+.main { background-color: #0f172a; color: white; }
+
+.kpi-box {
+    border-radius: 14px;
+    padding: 22px;
+    text-align: center;
+    background: linear-gradient(135deg,#1e293b,#334155);
+    color: white;
+    box-shadow: 0px 8px 25px rgba(0,0,0,0.4);
+    transition: 0.3s;
+}
+.kpi-box:hover { transform: scale(1.05); }
+
+.section-title {
+    font-size: 24px;
+    font-weight: 600;
+    margin-top: 25px;
+}
+
+.insight-box {
+    background: #1e293b;
+    padding: 15px;
+    border-radius: 10px;
+    border-left: 4px solid #38bdf8;
+    margin-top: 10px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ================= TITLE =================
+st.markdown("<h1 style='text-align:center;'>💳 AI Credit Risk Intelligence Dashboard</h1>", unsafe_allow_html=True)
+st.markdown("---")
+
+# ================= KPI SECTION =================
+total_records = df.shape[0]
+avg_income = int(df["person_income"].mean())
+avg_loan = int(df["loan_amnt"].mean())
+default_rate = round(df["loan_status"].mean() * 100, 2)
+avg_interest = round(df["loan_int_rate"].mean(), 2)
+
+k1, k2, k3, k4 = st.columns(4)
+
+k1.markdown(f"""<div class="kpi-box"><b>Total Applicants</b><br><h2>{total_records}</h2></div>""", unsafe_allow_html=True)
+k2.markdown(f"""<div class="kpi-box"><b>Avg Income</b><br><h2>₹ {avg_income:,}</h2></div>""", unsafe_allow_html=True)
+k3.markdown(f"""<div class="kpi-box"><b>Avg Loan</b><br><h2>₹ {avg_loan:,}</h2></div>""", unsafe_allow_html=True)
+k4.markdown(f"""<div class="kpi-box"><b>Default Rate</b><br><h2>{default_rate}%</h2></div>""", unsafe_allow_html=True)
+
+# ================= DATASET OVERVIEW =================
+st.markdown("---")
+st.markdown('<div class="section-title">📂 Dataset Overview</div>', unsafe_allow_html=True)
+
+rows, cols = df.shape
+high_risk_count = df[df["loan_status"] == 1].shape[0]
+
+o1, o2, o3, o4 = st.columns(4)
+
+o1.markdown(f"""
+<div class="kpi-box">
+<b>Total Rows</b><br>
+<h3>{rows}</h3>
+</div>
+""", unsafe_allow_html=True)
+
+o2.markdown(f"""
+<div class="kpi-box">
+<b>Total Columns</b><br>
+<h3>{cols}</h3>
+</div>
+""", unsafe_allow_html=True)
+
+o3.markdown(f"""
+<div class="kpi-box">
+<b>Numerical Features</b><br>
+<h3>{len(num_features)}</h3>
+</div>
+""", unsafe_allow_html=True)
+
+o4.markdown(f"""
+<div class="kpi-box">
+<b>High Risk Customers</b><br>
+<h3>{high_risk_count}</h3>
+</div>
+""", unsafe_allow_html=True)
+
+# ================= SAMPLE DATA (EXPANDABLE) =================
+with st.expander("🔍 Click to View Sample Dataset"):
+
+    st.dataframe(
+        df.head(30),
+        use_container_width=True,
+        height=500
+    )
+
+
+
+# ================= EXECUTIVE SUMMARY =================
+st.markdown("---")
+st.markdown('<div class="section-title">📌 Executive Summary</div>', unsafe_allow_html=True)
+
+high_risk = df[df["loan_status"] == 1].shape[0]
+low_risk = df[df["loan_status"] == 0].shape[0]
+
+st.markdown(f"""
+<div class="insight-box">
+• Dataset contains <b>{total_records}</b> applicants.<br>
+• <b>{high_risk}</b> customers classified as high risk ({default_rate}%).<br>
+• Loan amount and interest rate show strong influence on default probability.
+</div>
+""", unsafe_allow_html=True)
+
+# ================= ANALYSIS SECTION =================
+# ================= ANALYSIS SECTION =================
+st.markdown("---")
+st.markdown('<div class="section-title">📊 Interactive Data Analysis</div>', unsafe_allow_html=True)
+
+analysis_type = st.selectbox(
+    "Select Analysis Type",
+    ["Univariate", "Bivariate"]
+)
+
+# ================= UNIVARIATE =================
+if analysis_type == "Univariate":
+
+    feature = st.selectbox("Select Feature", num_features + cat_features)
+
+    graph_type = st.selectbox(
+        "Select Graph Type",
+        ["Histogram", "Box Plot", "Bar Chart", "Pie Chart"]
+    )
+
+    if feature in num_features:
+
+        if graph_type == "Histogram":
+            fig = px.histogram(df, x=feature, nbins=30, template="plotly_dark")
+
+        elif graph_type == "Box Plot":
+            fig = px.box(df, x=feature, template="plotly_dark")
+
+        elif graph_type == "Bar Chart":
+            fig = px.bar(
+                df[feature].value_counts().reset_index(),
+                x="index",
+                y=feature,
+                template="plotly_dark"
+            )
+
+        else:
+            fig = px.histogram(df, x=feature, nbins=30, template="plotly_dark")
+
+        insight_text = f"""
+• Average: {round(df[feature].mean(),2)}
+• Max: {round(df[feature].max(),2)}
+• Min: {round(df[feature].min(),2)}
+"""
+
+    else:
+
+        if graph_type == "Pie Chart":
+            fig = px.pie(df, names=feature, template="plotly_dark")
+
+        else:
+            fig = px.bar(
+                df[feature].value_counts().reset_index(),
+                x="index",
+                y=feature,
+                template="plotly_dark"
+            )
+
+        top_cat = df[feature].value_counts().idxmax()
+
+        insight_text = f"""
+• Most common category: {top_cat}
+• Unique categories: {df[feature].nunique()}
+• Distribution varies across applicants
+"""
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+# ================= BIVARIATE =================
+else:
+
+    relation_type = st.selectbox(
+        "Select Relationship Type",
+        ["Num vs Num", "Num vs Cat", "Cat vs Cat"]
+    )
+
+    graph_type = st.selectbox(
+        "Select Graph Type",
+        ["Scatter Plot", "Box Plot", "Bar Chart"]
+    )
+
+    if relation_type == "Num vs Num":
+
+        x = st.selectbox("Select X", num_features)
+        y = st.selectbox("Select Y", num_features, index=1)
+
+        if graph_type == "Scatter Plot":
+            fig = px.scatter(df, x=x, y=y,
+                             color="loan_status",
+                             template="plotly_dark")
+        else:
+            fig = px.line(df, x=x, y=y, template="plotly_dark")
+
+        insight_text = f"""
+• Correlation: {round(df[x].corr(df[y]),2)}
+• Financial relationship visible
+• Risk clustering observed
+"""
+
+    elif relation_type == "Num vs Cat":
+
+        num = st.selectbox("Numerical Feature", num_features)
+        cat = st.selectbox("Categorical Feature", cat_features)
+
+        if graph_type == "Box Plot":
+            fig = px.box(df, x=cat, y=num, template="plotly_dark")
+        else:
+            fig = px.bar(df.groupby(cat)[num].mean().reset_index(),
+                         x=cat, y=num,
+                         template="plotly_dark")
+
+        insight_text = f"""
+• {num} varies across {cat}
+• Median comparison shows difference
+• Category impacts financial behaviour
+"""
+
+    else:
+
+        x = st.selectbox("Category 1", cat_features)
+        y = st.selectbox("Category 2", cat_features)
+
+        fig = px.histogram(df, x=x, color=y,
+                           barmode="group",
+                           template="plotly_dark")
+
+        insight_text = f"""
+• Relationship between {x} and {y}
+• Category proportions differ
+• Some combinations indicate higher risk
+"""
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+# ================= INSIGHTS =================
+st.markdown(f"""
+<div class="insight-box"> <br> <br>
+📊 Insights: <br>
+{insight_text}
+</div>
+""", unsafe_allow_html=True)
+
+
+
+
+st.markdown("---")
+st.success("🚀 Executive-Level Credit Risk Dashboard by Devendra Gangurde")
